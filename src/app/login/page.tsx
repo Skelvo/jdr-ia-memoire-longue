@@ -32,10 +32,19 @@ export default function LoginPage() {
   async function handleSignUp() {
     setStatus("loading");
     const supabase = createBrowserSupabaseClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       setStatus("error");
       setErrorMessage(error.message);
+      return;
+    }
+    if (!data.session) {
+      // Compte créé mais pas de session : Supabase attend une confirmation
+      // par email ("Confirm email" encore activé côté Authentication > Providers).
+      setStatus("error");
+      setErrorMessage(
+        "Compte créé, mais pas connecté automatiquement : \"Confirm email\" est probablement encore activé dans Supabase (Authentication > Sign In / Providers > Email). Désactive-le puis réessaie."
+      );
       return;
     }
     router.push("/");
