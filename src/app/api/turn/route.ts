@@ -60,14 +60,17 @@ export async function POST(req: NextRequest) {
 
   const nextTurn = world.turn_count + 1;
 
+  // Build the context BEFORE inserting the player's new message: buildTurnContext
+  // reads the recent messages window from the DB, so inserting first would make
+  // this turn's message appear twice (once from that window, once appended below).
+  const context = await buildTurnContext(worldId);
+
   await supabase.from("messages").insert({
     world_id: worldId,
     turn_index: nextTurn,
     role: "user",
     content: message,
   });
-
-  const context = await buildTurnContext(worldId);
 
   const anthropic = getAnthropicClient();
 
