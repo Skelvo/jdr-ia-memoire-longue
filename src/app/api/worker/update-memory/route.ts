@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
         state: newState,
         diff: output.state_patch,
         source: "ai",
+        turn_index: turnIndex,
       });
     }
 

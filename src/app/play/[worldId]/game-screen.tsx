@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { StoredMessage } from "@/lib/types";
 
 interface Props {
@@ -22,15 +23,13 @@ export function GameScreen({ worldId, title, genre, tone, initialMessages }: Pro
   );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const [memoryUpdated, setMemoryUpdated] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  async function sendTurn(e: React.FormEvent) {
-    e.preventDefault();
-    const message = input.trim();
-    if (!message || streaming) return;
-
-    setInput("");
+  // Streams one turn for `message`, appending a user bubble + a live assistant
+  // bubble. Shared by the normal send flow and "Régénérer" (SPEC.md §9 UX).
+  async function runTurn(message: string) {
     setMemoryUpdated(false);
     setMessages((prev) => [
       ...prev,
@@ -103,17 +102,72 @@ export function GameScreen({ worldId, title, genre, tone, initialMessages }: Pro
     }
   }
 
+  async function sendTurn(e: React.FormEvent) {
+    e.preventDefault();
+    const message = input.trim();
+    if (!message || streaming) return;
+    setInput("");
+    await runTurn(message);
+  }
+
+  // "Annuler le dernier tour": drops the last exchange and rolls the world
+  // sheet back server-side (POST /api/turn/undo), then removes it locally.
+  async function undoLastTurn() {
+    if (streaming || undoing || messages.length === 0) return;
+    setUndoing(true);
+    const res = await fetch("/api/turn/undo", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ worldId }),
+    });
+    if (res.ok) {
+      setMessages((prev) => prev.slice(0, -2));
+      setMemoryUpdated(false);
+    }
+    setUndoing(false);
+  }
+
+  // "Régénérer la dernière réponse": undo, then replay the same player message.
+  async function regenerate() {
+    if (streaming || undoing || messages.length === 0) return;
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (!lastUser) return;
+
+    setUndoing(true);
+    const res = await fetch("/api/turn/undo", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ worldId }),
+    });
+    setUndoing(false);
+
+    if (res.ok) {
+      setMessages((prev) => prev.slice(0, -2));
+      await runTurn(lastUser.content);
+    }
+  }
+
+  const canUndo = messages.length > 0 && !streaming && !undoing;
+
   return (
     <main className="flex h-dvh flex-col bg-zinc-950 text-zinc-100">
       <header className="flex items-center justify-between border-b border-zinc-900 px-4 py-3">
         <h1 className="truncate text-sm font-medium">{title}</h1>
-        <span
-          className={`text-xs text-zinc-500 transition-opacity ${
-            memoryUpdated ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          Carnet mis à jour
-        </span>
+        <div className="flex items-center gap-3">
+          <span
+            className={`text-xs text-zinc-500 transition-opacity ${
+              memoryUpdated ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            Carnet mis à jour
+          </span>
+          <Link
+            href={`/play/${worldId}/carnet`}
+            className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-300"
+          >
+            Carnet
+          </Link>
+        </div>
       </header>
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-6">
@@ -129,6 +183,18 @@ export function GameScreen({ worldId, title, genre, tone, initialMessages }: Pro
             {m.content || (m.role === "assistant" && streaming ? "…" : "")}
           </div>
         ))}
+
+        {canUndo && (
+          <div className="flex gap-2 pt-1 text-xs text-zinc-500">
+            <button onClick={regenerate} className="hover:text-zinc-300">
+              Régénérer la dernière réponse
+            </button>
+            <span>·</span>
+            <button onClick={undoLastTurn} className="hover:text-zinc-300">
+              Annuler le dernier tour
+            </button>
+          </div>
+        )}
       </div>
 
       <form

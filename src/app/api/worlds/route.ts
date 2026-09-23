@@ -54,6 +54,18 @@ export async function POST(req: NextRequest) {
   await supabase.from("world_state").insert({
     world_id: world.id,
     state: worldState,
+    version: 1,
+  });
+
+  // Record the initial state in history too, so "undo the last turn" and
+  // Carnet edits always have a version-1 baseline to roll back to.
+  await supabase.from("world_state_history").insert({
+    world_id: world.id,
+    version: 1,
+    state: worldState,
+    diff: null,
+    source: "player",
+    turn_index: null,
   });
 
   return NextResponse.json({ worldId: world.id });
