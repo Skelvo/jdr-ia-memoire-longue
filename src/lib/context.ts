@@ -1,4 +1,4 @@
-import { createServiceSupabaseClient } from "@/lib/supabase";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
 import { WorldState, StoredMessage } from "@/lib/types";
 
 const RECENT_MESSAGES_WINDOW = 16;

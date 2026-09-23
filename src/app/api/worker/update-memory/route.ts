@@ -3,7 +3,7 @@ import { applyPatch, Operation } from "fast-json-patch";
 import { z } from "zod";
 import { getAnthropicClient, BACKGROUND_MODEL } from "@/lib/anthropic";
 import { memoryWorkerSystemPrompt } from "@/lib/prompts";
-import { createServiceSupabaseClient } from "@/lib/supabase";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export const runtime = "nodejs";
 

@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { getAnthropicClient, NARRATION_MODEL } from "@/lib/anthropic";
 import { buildTurnContext } from "@/lib/context";
 import { gameMasterSystemPrompt } from "@/lib/prompts";
-import { createServiceSupabaseClient } from "@/lib/supabase";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -26,9 +27,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createServiceSupabaseClient();
+  // Auth check via the user-scoped client: RLS guarantees this world query
+  // only returns a row the requester actually owns (SPEC.md §4/§10).
+  const authClient = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
 
-  const { data: world } = await supabase
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Non authentifié." }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const { data: world } = await authClient
     .from("worlds")
     .select("turn_count")
     .eq("id", worldId)
@@ -40,6 +53,10 @@ export async function POST(req: NextRequest) {
       headers: { "content-type": "application/json" },
     });
   }
+
+  // From here on, use the service client: the memory worker call it triggers
+  // needs elevated access anyway, and ownership was already established above.
+  const supabase = createServiceSupabaseClient();
 
   const nextTurn = world.turn_count + 1;
 
